@@ -7,18 +7,20 @@ import { DiscordPreview } from '@/components/discord-preview';
 import { Eye, Edit3, Info } from 'lucide-react';
 
 export default function DashboardPage() {
+  const defaultSender = process.env.NEXT_PUBLIC_SENDER_NAME || 'uOttawa Faculty Desk';
+  const defaultRole = process.env.NEXT_PUBLIC_DISCORD_ROLE_PING || '@everyone';
+  const targetChannel = process.env.NEXT_PUBLIC_DISCORD_CHANNEL || 'school-announcements';
+
   const [formData, setFormData] = useState<ComposerData>({
     title: '',
     body: '',
+    senderName: defaultSender,
+    rolePing: defaultRole,
     accentColor: '#8F001A',
     bannerUrl: ''
   });
   const [isPublishing, setIsPublishing] = useState(false);
   const [mobileTab, setMobileTab] = useState<'composer' | 'preview'>('composer');
-
-  const rolePing = process.env.NEXT_PUBLIC_DISCORD_ROLE_PING || '@everyone';
-  const senderName = process.env.NEXT_PUBLIC_SENDER_NAME || 'uOttawa Faculty Desk';
-  const targetChannel = process.env.NEXT_PUBLIC_DISCORD_CHANNEL || 'school-announcements';
 
   const handlePublish = async () => {
     setIsPublishing(true);
@@ -28,8 +30,6 @@ export default function DashboardPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...formData,
-          rolePing,
-          senderName,
           targetChannel,
         }),
       });
@@ -94,7 +94,6 @@ export default function DashboardPage() {
               onChange={setFormData}
               onPublish={handlePublish}
               isPublishing={isPublishing}
-              rolePing={rolePing}
               targetChannel={targetChannel}
             />
           </div>
@@ -131,10 +130,10 @@ export default function DashboardPage() {
               title={formData.title}
               body={formData.body}
               targetChannel={targetChannel}
-              rolePing={rolePing}
+              rolePing={formData.rolePing}
               accentColor={formData.accentColor}
               bannerUrl={formData.bannerUrl}
-              senderName={senderName}
+              senderName={formData.senderName}
             />
           </div>
         </div>

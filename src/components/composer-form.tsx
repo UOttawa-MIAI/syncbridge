@@ -13,12 +13,19 @@ import {
   Bold,
   List,
   Link2,
-  RotateCcw
+  RotateCcw,
+  User,
+  Info,
+  Bell,
+  BellOff,
+  ChevronDown
 } from 'lucide-react';
 
 export interface ComposerData {
   title: string;
   body: string;
+  senderName: string;
+  rolePing: string;
   accentColor: string;
   bannerUrl: string;
 }
@@ -28,7 +35,6 @@ interface ComposerFormProps {
   onChange: (data: ComposerData) => void;
   onPublish: () => Promise<void>;
   isPublishing: boolean;
-  rolePing: string;
   targetChannel: string;
 }
 
@@ -38,18 +44,21 @@ const PRESET_TEMPLATES = [
     title: 'Distinguished Speaker Series: AI & Robotics Keynote',
     body: 'We are thrilled to announce our upcoming guest lecture featuring **Dr. Elena Vance** from OpenAI.\n\n* **Date & Time**: Friday, Oct 16 | 2:00 PM – 3:30 PM EDT\n* **Location**: STEM Complex (STM) 117 / Zoom\n* **Topic**: *Frontiers in Scalable Reinforcement Learning*\n\n👉 **[Click here to RSVP on the Faculty Portal](https://www.uottawa.ca/faculty-engineering)**',
     color: '#8F001A',
+    rolePing: '@everyone',
   },
   {
     name: '💼 Career & Co-op Opportunity',
     title: 'New Graduate AI Research Internships (Winter 2027)',
     body: 'The Vector Institute and partner labs have opened priority applications for MIAI graduate students.\n\n* **Roles**: Applied ML Intern, Computer Vision Fellow\n* **Eligibility**: Enrolled MIAI students in good standing\n* **Application Deadline**: September 30, 2026\n\n📌 Check the link below to submit your CV and cover letter directly.',
     color: '#16A34A',
+    rolePing: '@everyone',
   },
   {
     name: '⏰ Academic Deadline Notice',
     title: 'Reminder: Fall 2026 Course Drop & Registration Deadline',
     body: 'Please note the official academic dates for the current term:\n\n1. **Last day to modify course selection**: Sept 22, 2026\n2. **Financial credit deadline**: Oct 5, 2026\n\nFor degree audit and elective substitution questions, please contact the Graduate Studies Office at `engineering.grad@uottawa.ca`.',
     color: '#D97706',
+    rolePing: '@everyone',
   },
 ];
 
@@ -66,14 +75,13 @@ export const ComposerForm: React.FC<ComposerFormProps> = ({
   onChange,
   onPublish,
   isPublishing,
-  rolePing,
   targetChannel,
 }) => {
   const [publishStatus, setPublishStatus] = useState<{ success?: boolean; message?: string } | null>(null);
+  const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const applyTemplate = (template: typeof PRESET_TEMPLATES[0]) => {
-    // If user has custom content, ask confirmation to avoid accidental work loss
     if (data.body && data.body.length > 30) {
       const confirmChange = window.confirm(
         'Applying this template will replace your current title and body text. Do you want to proceed?'
@@ -85,7 +93,8 @@ export const ComposerForm: React.FC<ComposerFormProps> = ({
       ...data,
       title: template.title,
       body: template.body,
-      accentColor: template.color
+      accentColor: template.color,
+      rolePing: template.rolePing,
     });
   };
 
@@ -95,7 +104,8 @@ export const ComposerForm: React.FC<ComposerFormProps> = ({
         ...data,
         title: '',
         body: '',
-        bannerUrl: ''
+        bannerUrl: '',
+        rolePing: '@everyone',
       });
     }
   };
@@ -126,7 +136,6 @@ export const ComposerForm: React.FC<ComposerFormProps> = ({
       }
     } else if (formatType === 'list') {
       if (selectedText) {
-        // Prefix each selected line with bullet
         const lines = selectedText.split('\n');
         const bulleted = lines.map((line) => (line.startsWith('* ') ? line : `* ${line}`)).join('\n');
         newText = currentText.substring(0, start) + bulleted + currentText.substring(end);
@@ -152,7 +161,6 @@ export const ComposerForm: React.FC<ComposerFormProps> = ({
 
     onChange({ ...data, body: newText });
 
-    // Restore focus & set selection highlights
     setTimeout(() => {
       textarea.focus();
       textarea.setSelectionRange(newCursorStart, newCursorEnd);
@@ -170,30 +178,44 @@ export const ComposerForm: React.FC<ComposerFormProps> = ({
   };
 
   return (
-    <div className="bg-slate-900/90 rounded-2xl border border-slate-800 p-5 sm:p-6 shadow-xl space-y-6">
-      {/* Quick Templates Bar */}
-      <div>
+    <div className="bg-slate-900/90 rounded-2xl border border-slate-800 p-5 sm:p-6 shadow-xl space-y-5">
+      {/* Quick Templates Bar (Collapsible on Mobile, Expanded on Desktop) */}
+      <div className="rounded-xl border border-slate-800/80 bg-slate-950/40 p-3 sm:p-0 sm:border-0 sm:bg-transparent">
         <div className="flex items-center justify-between mb-2.5">
-          <label className="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center space-x-1.5">
+          <button
+            type="button"
+            onClick={() => setIsTemplatesOpen(!isTemplatesOpen)}
+            className="text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-200 flex items-center space-x-1.5 transition cursor-pointer"
+          >
             <Sparkles className="w-3.5 h-3.5 text-garnet-400" />
             <span>Starter Templates</span>
-          </label>
+            <ChevronDown
+              className={`w-3.5 h-3.5 text-slate-500 transition-transform duration-200 sm:hidden ${
+                isTemplatesOpen ? 'rotate-180 text-garnet-400' : ''
+              }`}
+            />
+          </button>
           <button
             type="button"
             onClick={handleClearForm}
-            className="text-[11px] text-slate-400 hover:text-rose-400 flex items-center space-x-1 transition"
+            className="text-[11px] text-slate-400 hover:text-rose-400 flex items-center space-x-1 transition cursor-pointer"
             title="Clear all fields"
           >
             <RotateCcw className="w-3 h-3" />
             <span>Reset to Blank</span>
           </button>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+
+        {/* Template Grid: Collapsed on Mobile (< sm) unless toggled; Always Visible on Desktop (>= sm) */}
+        <div className={`grid grid-cols-1 sm:grid-cols-3 gap-2 ${isTemplatesOpen ? 'grid' : 'hidden sm:grid'}`}>
           {PRESET_TEMPLATES.map((tmpl) => (
             <button
               key={tmpl.name}
               type="button"
-              onClick={() => applyTemplate(tmpl)}
+              onClick={() => {
+                applyTemplate(tmpl);
+                setIsTemplatesOpen(false); // auto-collapse on mobile after picking
+              }}
               className="text-left px-3 py-2 rounded-xl bg-slate-950/60 hover:bg-slate-800 border border-slate-800/80 hover:border-garnet-700/60 text-xs font-medium text-slate-300 transition duration-150 flex items-center justify-between group"
             >
               <span className="truncate">{tmpl.name}</span>
@@ -202,34 +224,98 @@ export const ComposerForm: React.FC<ComposerFormProps> = ({
         </div>
       </div>
 
-      {/* Target Channel & Role Display Badges */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="flex items-center space-x-3 px-3.5 py-2.5 rounded-xl bg-slate-950/80 border border-slate-800">
-          <div className="p-2 rounded-lg bg-slate-900 border border-slate-800 text-garnet-400">
-            <Layers className="w-4 h-4" />
-          </div>
-          <div>
-            <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold block">Destination Channel</span>
-            <span className="text-xs font-mono font-medium text-slate-200">
-              {targetChannel.startsWith('#') ? targetChannel : `#${targetChannel}`}
-            </span>
+      {/* Target Channel, Sender Name & Role Notification Ping Row */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Column 1: Target Channel (Read-only / Pinned) */}
+        <div>
+          <label className="text-xs font-semibold uppercase tracking-wider text-slate-300 flex items-center space-x-1.5 mb-1.5">
+            <Layers className="w-3.5 h-3.5 text-garnet-400" />
+            <span>Target Channel</span>
+          </label>
+          <div className="w-full px-3.5 py-2 rounded-xl bg-slate-950/80 border border-slate-800 text-xs text-slate-300 font-mono flex items-center justify-between">
+            <span>{targetChannel.startsWith('#') ? targetChannel : `#${targetChannel}`}</span>
           </div>
         </div>
 
-        <div className="flex items-center space-x-3 px-3.5 py-2.5 rounded-xl bg-slate-950/80 border border-slate-800">
-          <div className="p-2 rounded-lg bg-slate-900 border border-slate-800 text-emerald-400">
-            <AtSign className="w-4 h-4" />
+        {/* Column 2: Sender Name */}
+        <div>
+          <label className="text-xs font-semibold uppercase tracking-wider text-slate-300 flex items-center space-x-1.5 mb-1.5">
+            <User className="w-3.5 h-3.5 text-slate-400" />
+            <span>Sender Name</span>
+          </label>
+          <input
+            type="text"
+            value={data.senderName}
+            onChange={(e) => onChange({ ...data, senderName: e.target.value })}
+            placeholder="e.g. uOttawa Faculty Desk"
+            className="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-garnet-600 font-medium"
+          />
+        </div>
+
+        {/* Column 3: Target Notification Role */}
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="text-xs font-semibold uppercase tracking-wider text-slate-300 flex items-center space-x-1.5">
+              <AtSign className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Notification Ping</span>
+            </label>
+
+            {/* Info Tooltip */}
+            <div className="relative group cursor-help">
+              <span className="text-[10px] text-slate-400 hover:text-slate-200 flex items-center space-x-0.5">
+                <span>Info</span>
+                <Info className="w-3 h-3 text-slate-500 group-hover:text-slate-300" />
+              </span>
+
+              {/* Tooltip Popover */}
+              <div className="absolute right-0 top-full mt-1.5 hidden group-hover:block z-30 w-60 p-2.5 rounded-xl bg-slate-900 border border-slate-700 shadow-2xl text-[11px] text-slate-300 font-sans leading-relaxed pointer-events-none">
+                <p className="font-semibold text-white mb-0.5">Notification Ping</p>
+                <p className="text-slate-400">
+                  Tag <strong className="text-emerald-400 font-mono">@everyone</strong> to notify all channel members with an unread badge. Set to <span className="font-mono text-slate-300">none</span> for silent announcements.
+                </p>
+              </div>
+            </div>
           </div>
-          <div>
-            <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold block">Target Notification</span>
-            <span className="text-xs font-mono font-semibold text-emerald-400">{rolePing}</span>
+
+          <div className="flex items-center space-x-1.5">
+            <input
+              type="text"
+              value={data.rolePing}
+              onChange={(e) => onChange({ ...data, rolePing: e.target.value })}
+              placeholder="@everyone, @here, or none"
+              className="flex-1 min-w-0 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-emerald-300 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-garnet-600 font-mono"
+            />
+            {/* Quick helper buttons */}
+            <button
+              type="button"
+              onClick={() => onChange({ ...data, rolePing: '@everyone' })}
+              className={`px-2 py-2 rounded-xl text-[11px] font-mono font-medium border transition flex items-center space-x-1 ${data.rolePing === '@everyone'
+                  ? 'bg-emerald-950 border-emerald-700 text-emerald-300'
+                  : 'bg-slate-950 hover:bg-slate-800 border-slate-800 text-slate-400'
+                }`}
+              title="Tag @everyone (All Members)"
+            >
+              <Bell className="w-3 h-3 text-emerald-400" />
+              <span className="hidden xl:inline">@all</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onChange({ ...data, rolePing: 'none' })}
+              className={`px-2 py-2 rounded-xl text-[11px] font-mono font-medium border transition flex items-center space-x-1 ${data.rolePing === 'none' || data.rolePing === ''
+                  ? 'bg-slate-800 border-slate-700 text-slate-200'
+                  : 'bg-slate-950 hover:bg-slate-800 border-slate-800 text-slate-500'
+                }`}
+              title="Silent (No Ping)"
+            >
+              <BellOff className="w-3 h-3" />
+            </button>
           </div>
         </div>
       </div>
 
       {/* Announcement Title */}
       <div>
-        <label className="text-xs font-semibold uppercase tracking-wider text-slate-300 block mb-2">
+        <label className="text-xs font-semibold uppercase tracking-wider text-slate-300 block mb-1.5">
           Announcement Title <span className="text-garnet-400">*</span>
         </label>
         <input
