@@ -1,28 +1,83 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Navbar } from '@/components/navbar';
 import { ComposerForm, ComposerData } from '@/components/composer-form';
 import { DiscordPreview } from '@/components/discord-preview';
-import { Eye, Edit3, Info } from 'lucide-react';
+import { AuthModal } from '@/components/auth-modal';
+import { Eye, Edit3, Info, Lock } from 'lucide-react';
+
+const DRAFT_STORAGE_KEY = 'syncbridge_announcement_draft_v1';
 
 export default function DashboardPage() {
   const defaultSender = process.env.NEXT_PUBLIC_SENDER_NAME || 'uOttawa Faculty Desk';
   const defaultRole = process.env.NEXT_PUBLIC_DISCORD_ROLE_PING || '@everyone';
   const targetChannel = process.env.NEXT_PUBLIC_DISCORD_CHANNEL || 'school-announcements';
 
+  // Form State with localStorage persistence
   const [formData, setFormData] = useState<ComposerData>({
     title: '',
     body: '',
     senderName: defaultSender,
     rolePing: defaultRole,
     accentColor: '#8F001A',
-    bannerUrl: ''
+    bannerUrl: '',
   });
+
+  // Auth & Modal State
+  const [user, setUser] = useState<{ email: string } | null>(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [pendingPublish, setPendingPublish] = useState(false);
+
   const [isPublishing, setIsPublishing] = useState(false);
   const [mobileTab, setMobileTab] = useState<'composer' | 'preview'>('composer');
 
-  const handlePublish = async () => {
+  // 1. Check existing session on mount
+  const checkSession = useCallback(async () => {
+    try {
+      const res = await fetch('/api/auth/session');
+      const data = await res.json();
+      if (data.authenticated && data.user) {
+        setUser(data.user);
+      } else {
+        setUser(null);
+      }
+    } catch (err) {
+      console.error('Failed to check session:', err);
+      setUser(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    checkSession();
+
+    // Restore draft from localStorage if available
+    try {
+      const savedDraft = localStorage.getItem(DRAFT_STORAGE_KEY);
+      if (savedDraft) {
+        const parsed = JSON.parse(savedDraft);
+        setFormData((prev) => ({
+          ...prev,
+          ...parsed,
+        }));
+      }
+    } catch (e) {
+      console.error('Failed to load draft from localStorage:', e);
+    }
+  }, [checkSession]);
+
+  // Autosave draft changes to localStorage
+  const handleFormChange = (newData: ComposerData) => {
+    setFormData(newData);
+    try {
+      localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(newData));
+    } catch (e) {
+      console.error('Failed to save draft to localStorage:', e);
+    }
+  };
+
+  // Perform the actual API broadcast
+  const executeBroadcast = async () => {
     setIsPublishing(true);
     try {
       const res = await fetch('/api/announce', {
@@ -36,10 +91,53 @@ export default function DashboardPage() {
 
       const json = await res.json();
       if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          // Session expired or invalid; prompt login
+          setUser(null);
+          setIsAuthModalOpen(true);
+        }
         throw new Error(json.error || 'Failed to publish announcement');
       }
+
+      // Successful publish: optionally keep draft or clear if desired
+      // We keep it in state so users can review what was sent
     } finally {
       setIsPublishing(false);
+      setPendingPublish(false);
+    }
+  };
+
+  // Called when user clicks "Publish Announcement to Discord"
+  const handlePublish = async () => {
+    if (!user) {
+      setPendingPublish(true);
+      setIsAuthModalOpen(true);
+      return;
+    }
+
+    await executeBroadcast();
+  };
+
+  // Handle successful login from AuthModal
+  const handleAuthSuccess = async (authenticatedUser: { email: string }) => {
+    setUser(authenticatedUser);
+    setIsAuthModalOpen(false);
+
+    // If the user clicked publish before logging in, resume broadcast automatically!
+    if (pendingPublish) {
+      setTimeout(() => {
+        executeBroadcast();
+      }, 100);
+    }
+  };
+
+  // Handle Sign Out
+  const handleSignOut = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      setUser(null);
+    } catch (err) {
+      console.error('Logout error:', err);
     }
   };
 
@@ -48,7 +146,21 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
       {/* Navigation Header */}
-      <Navbar />
+      <Navbar
+        user={user}
+        onOpenAuth={() => setIsAuthModalOpen(true)}
+        onSignOut={handleSignOut}
+      />
+
+      {/* Auth Modal */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => {
+          setIsAuthModalOpen(false);
+          setPendingPublish(false);
+        }}
+        onSuccess={handleAuthSuccess}
+      />
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-6 space-y-5">
@@ -57,10 +169,11 @@ export default function DashboardPage() {
           <button
             type="button"
             onClick={() => setMobileTab('composer')}
-            className={`flex-1 py-2 rounded-lg text-xs font-semibold flex items-center justify-center space-x-2 transition ${mobileTab === 'composer'
-              ? 'bg-garnet-800 text-white shadow-md'
-              : 'text-slate-400 hover:text-white'
-              }`}
+            className={`flex-1 py-2 rounded-lg text-xs font-semibold flex items-center justify-center space-x-2 transition ${
+              mobileTab === 'composer'
+                ? 'bg-garnet-800 text-white shadow-md'
+                : 'text-slate-400 hover:text-white'
+            }`}
           >
             <Edit3 className="w-3.5 h-3.5" />
             <span>1. Composer Form</span>
@@ -68,10 +181,11 @@ export default function DashboardPage() {
           <button
             type="button"
             onClick={() => setMobileTab('preview')}
-            className={`flex-1 py-2 rounded-lg text-xs font-semibold flex items-center justify-center space-x-2 transition ${mobileTab === 'preview'
-              ? 'bg-garnet-800 text-white shadow-md'
-              : 'text-slate-400 hover:text-white'
-              }`}
+            className={`flex-1 py-2 rounded-lg text-xs font-semibold flex items-center justify-center space-x-2 transition ${
+              mobileTab === 'preview'
+                ? 'bg-garnet-800 text-white shadow-md'
+                : 'text-slate-400 hover:text-white'
+            }`}
           >
             <Eye className="w-3.5 h-3.5" />
             <span>2. Live Discord Preview</span>
@@ -87,11 +201,18 @@ export default function DashboardPage() {
                 <Edit3 className="w-4 h-4 text-garnet-400" />
                 <span>Compose Notice</span>
               </h2>
+
+              {!user && (
+                <span className="text-[11px] text-slate-400 flex items-center space-x-1 font-medium bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
+                  <Lock className="w-3 h-3 text-amber-400" />
+                  <span>Sign in required on publish</span>
+                </span>
+              )}
             </div>
 
             <ComposerForm
               data={formData}
-              onChange={setFormData}
+              onChange={handleFormChange}
               onPublish={handlePublish}
               isPublishing={isPublishing}
               targetChannel={targetChannel}

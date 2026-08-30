@@ -1,7 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getSessionFromRequest, isEmailWhitelisted } from '@/lib/auth';
+
+export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
   try {
+    // 1. Authenticate Request
+    const session = await getSessionFromRequest(req);
+    if (!session || !session.email) {
+      return NextResponse.json(
+        { error: 'Unauthorized. Please sign in with your authorized @uottawa.ca email.' },
+        { status: 401 }
+      );
+    }
+
+    // 2. Validate Whitelist Status
+    const { whitelisted } = isEmailWhitelisted(session.email);
+    if (!whitelisted) {
+      return NextResponse.json(
+        { error: 'Forbidden. Your @uottawa.ca account is not on the authorized faculty whitelist.' },
+        { status: 403 }
+      );
+    }
+
     const payload = await req.json();
     const { title, body, targetChannel, rolePing, accentColor, bannerUrl, senderName } = payload;
 
@@ -18,6 +39,7 @@ export async function POST(req: NextRequest) {
     // If webhook is not configured yet, simulate successful test mode
     if (!webhookUrl) {
       console.log('⚠️ [TEST MODE] No DISCORD_WEBHOOK_URL configured in .env. Simulating delivery:');
+      console.log(`👤 Verified Sender: ${session.email}`);
       console.log(JSON.stringify(payload, null, 2));
 
       return NextResponse.json({
@@ -25,6 +47,7 @@ export async function POST(req: NextRequest) {
         testMode: true,
         message: 'Simulated dispatch successful! (Add DISCORD_WEBHOOK_URL in .env for live Discord delivery)',
         dispatchedAt: new Date().toISOString(),
+        sender: session.email,
       });
     }
 
@@ -46,7 +69,7 @@ export async function POST(req: NextRequest) {
           color: decimalColor,
           image: isValidBanner ? { url: bannerUrl } : undefined,
           footer: {
-            text: 'uOttawa MIAI Community Bridge • Posted via SyncBridge',
+            text: `uOttawa MIAI Community Bridge • Authorized by ${session.email}`,
           },
           timestamp: new Date().toISOString(),
         },
@@ -75,6 +98,7 @@ export async function POST(req: NextRequest) {
       success: true,
       dispatchedAt: new Date().toISOString(),
       channel: targetChannel,
+      sender: session.email,
     });
   } catch (error: any) {
     console.error('SyncBridge API Handler Error:', error);
