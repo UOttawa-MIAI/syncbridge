@@ -7,12 +7,12 @@ import { DiscordPreview } from '@/components/discord-preview';
 import { AuthModal } from '@/components/auth-modal';
 import { Eye, Edit3, Info, Lock } from 'lucide-react';
 
+import { APP_CONFIG } from '@/lib/config';
+
 const DRAFT_STORAGE_KEY = 'syncbridge_announcement_draft_v1';
 
 export default function DashboardPage() {
-  const defaultSender = process.env.NEXT_PUBLIC_SENDER_NAME || 'uOttawa Faculty Desk';
-  const defaultRole = process.env.NEXT_PUBLIC_DISCORD_ROLE_PING || '@everyone';
-  const targetChannel = process.env.NEXT_PUBLIC_DISCORD_CHANNEL || 'school-announcements';
+  const { defaultSender, defaultRole, targetChannel, supportEmail, accentColor } = APP_CONFIG;
 
   // Form State with localStorage persistence
   const [formData, setFormData] = useState<ComposerData>({
@@ -20,7 +20,7 @@ export default function DashboardPage() {
     body: '',
     senderName: defaultSender,
     rolePing: defaultRole,
-    accentColor: '#8F001A',
+    accentColor: accentColor,
     bannerUrl: '',
   });
 
@@ -140,8 +140,6 @@ export default function DashboardPage() {
       console.error('Logout error:', err);
     }
   };
-
-  const supportEmail = process.env.SUPPORT_EMAIL || process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'support@uottawa.ca';
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">

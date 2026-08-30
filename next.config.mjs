@@ -1,9 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  env: {
-    SUPPORT_EMAIL: process.env.SUPPORT_EMAIL || 'tchen117@uottawa.ca',
-  },
   images: {
     remotePatterns: [
       {

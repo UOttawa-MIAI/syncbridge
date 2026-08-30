@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSessionFromRequest, isEmailWhitelisted } from '@/lib/auth';
+import { getSessionFromRequest, isEmailWhitelisted, getEnv } from '@/lib/auth';
+import { APP_CONFIG } from '@/lib/config';
 
 export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
@@ -35,7 +36,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Determine Webhook URL from environment variables based on channel
-    let webhookUrl = process.env.DISCORD_WEBHOOK_URL;
+    const webhookUrl = getEnv('DISCORD_WEBHOOK_URL');
 
     // If webhook is not configured yet, simulate successful test mode
     if (!webhookUrl) {
@@ -53,7 +54,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Convert HEX color to Discord Decimal
-    const cleanHex = (accentColor || '#8F001A').replace('#', '');
+    const cleanHex = (accentColor || APP_CONFIG.accentColor).replace('#', '');
     const decimalColor = parseInt(cleanHex, 16) || 0x8f001a;
 
     // Validate and format optional banner URL
@@ -61,7 +62,7 @@ export async function POST(req: NextRequest) {
 
     // Build Discord REST Webhook Payload
     const discordPayload: any = {
-      username: senderName || process.env.NEXT_PUBLIC_SENDER_NAME || 'uOttawa Faculty Desk',
+      username: senderName || APP_CONFIG.defaultSender,
       content: rolePing && rolePing !== 'none' ? rolePing : undefined,
       embeds: [
         {
