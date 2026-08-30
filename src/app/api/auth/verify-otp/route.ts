@@ -5,6 +5,7 @@ import {
   isEmailWhitelisted,
   SESSION_COOKIE_NAME,
   OTP_CHALLENGE_COOKIE_NAME,
+  getEnv,
 } from '@/lib/auth';
 
 export const runtime = 'edge';
@@ -12,10 +13,11 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
   try {
-    const { email, code } = await req.json();
+    const body = await req.json().catch(() => ({}));
+    const { email, code, challengeToken: bodyToken } = body;
 
     if (!email || !code) {
-      return NextResponse.json({ error: 'Email and 6-digit verification code are required.' }, { status: 400 });
+      return NextResponse.json({ error: 'Email and verification code are required.' }, { status: 400 });
     }
 
     const cleanEmail = email.trim().toLowerCase();
@@ -27,8 +29,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'This email is no longer on the authorized whitelist.' }, { status: 403 });
     }
 
-    // 2. Read the Stateless Challenge Token from HTTP-only Cookie
-    const challengeToken = req.cookies.get(OTP_CHALLENGE_COOKIE_NAME)?.value;
+    // 2. Read the Stateless Challenge Token from HTTP-only Cookie, Request Body, or Header fallback
+    const challengeToken =
+      req.cookies.get(OTP_CHALLENGE_COOKIE_NAME)?.value ||
+      bodyToken ||
+      req.headers.get('x-otp-challenge');
 
     // 3. Cryptographically Verify Challenge
     const verification = await verifyOtpChallengeToken(challengeToken, cleanEmail, cleanCode);
@@ -45,23 +50,24 @@ export async function POST(req: NextRequest) {
       user: { email: cleanEmail },
     });
 
-    // 5. Attach 7-Day Session Cookie & Clear the Challenge Cookie
+    const isSecure = req.url.startsWith('https://') || getEnv('NODE_ENV') === 'production';
+
+    // 5. Attach 7-Day Session Cookie & Clear Challenge Cookie
     response.cookies.set({
       name: SESSION_COOKIE_NAME,
       value: sessionToken,
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isSecure,
       sameSite: 'lax',
       maxAge: 60 * 60 * 24 * 7, // 7 days
       path: '/',
     });
 
-    // Clear challenge cookie
     response.cookies.set({
       name: OTP_CHALLENGE_COOKIE_NAME,
       value: '',
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isSecure,
       sameSite: 'lax',
       maxAge: 0,
       path: '/',
@@ -70,6 +76,6 @@ export async function POST(req: NextRequest) {
     return response;
   } catch (err: any) {
     console.error('Verify OTP API Error:', err);
-    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: err?.message || 'Internal Server Error' }, { status: 500 });
   }
 }

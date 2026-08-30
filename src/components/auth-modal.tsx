@@ -21,6 +21,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [step, setStep] = useState<'email' | 'otp'>('email');
   const [email, setEmail] = useState(initialEmail);
   const [otp, setOtp] = useState('');
+  const [challengeToken, setChallengeToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [simulatedCode, setSimulatedCode] = useState<string | null>(null);
@@ -28,10 +29,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   const otpInputRef = useRef<HTMLInputElement>(null);
 
+  // Full clean reset every time the modal is opened
   useEffect(() => {
     if (isOpen) {
+      setStep('email');
+      setEmail(initialEmail || '');
+      setOtp('');
+      setChallengeToken(null);
+      setIsLoading(false);
       setErrorMessage(null);
-      if (initialEmail) setEmail(initialEmail);
+      setSimulatedCode(null);
+      setCountdown(0);
     }
   }, [isOpen, initialEmail]);
 
@@ -90,7 +98,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         throw new Error(data.error || 'Failed to send verification code.');
       }
 
+      if (data.challengeToken) {
+        setChallengeToken(data.challengeToken);
+      }
+
       setStep('otp');
+      setOtp('');
       setCountdown(60);
       if (data.simulatedCode) {
         setSimulatedCode(data.simulatedCode);
@@ -107,8 +120,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setErrorMessage(null);
 
     const cleanCode = otp.trim();
-    if (!cleanCode || cleanCode.length !== 6) {
-      setErrorMessage('Please enter the full 6-digit verification code.');
+    if (!cleanCode) {
+      setErrorMessage('Please enter the verification code.');
       return;
     }
 
@@ -117,7 +130,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       const res = await fetch('/api/auth/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim().toLowerCase(), code: cleanCode }),
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          code: cleanCode,
+          challengeToken,
+        }),
       });
 
       let data: any = {};
@@ -239,19 +256,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </form>
           )}
 
-          {/* Step 2: Enter 6-Digit OTP */}
+          {/* Step 2: Enter OTP */}
           {step === 'otp' && (
             <form onSubmit={handleVerifyOtp} className="space-y-4">
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400">
-                    6-Digit Security Code
+                    Security Code
                   </label>
                   <button
                     type="button"
                     onClick={() => {
                       setStep('email');
+                      setOtp('');
                       setErrorMessage(null);
+                      setSimulatedCode(null);
                     }}
                     className="text-[11px] text-garnet-400 hover:text-garnet-300 underline"
                   >
@@ -268,20 +287,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <input
                     ref={otpInputRef}
                     type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    maxLength={6}
                     required
                     value={otp}
                     onChange={(e) => {
-                      const val = e.target.value.replace(/\D/g, '');
-                      setOtp(val);
-                      if (val.length === 6) {
-                        // Auto-submit when 6 digits are reached
-                        setTimeout(() => handleVerifyOtp(), 50);
-                      }
+                      setOtp(e.target.value.trim());
+                      if (errorMessage) setErrorMessage(null);
                     }}
-                    placeholder="123456"
+                    placeholder="Paste or type code"
                     className="w-full pl-10 pr-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-lg font-mono tracking-widest text-center text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-garnet-500 focus:border-transparent transition"
                   />
                 </div>
@@ -302,7 +314,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
               <button
                 type="submit"
-                disabled={isLoading || otp.length !== 6}
+                disabled={isLoading || !otp.trim()}
                 className="w-full py-2.5 px-4 rounded-xl bg-garnet-700 hover:bg-garnet-600 active:bg-garnet-800 text-white font-medium text-sm flex items-center justify-center space-x-2 shadow-lg shadow-garnet-900/30 transition duration-150 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {isLoading ? (

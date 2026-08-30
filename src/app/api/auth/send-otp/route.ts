@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isEmailWhitelisted, generateOtpCode, createOtpChallengeToken, OTP_CHALLENGE_COOKIE_NAME } from '@/lib/auth';
+import { isEmailWhitelisted, generateOtpCode, createOtpChallengeToken, OTP_CHALLENGE_COOKIE_NAME, getEnv } from '@/lib/auth';
 import { sendOtpEmail } from '@/lib/email';
 
 export const runtime = 'edge';
@@ -52,16 +52,19 @@ export async function POST(req: NextRequest) {
     const response = NextResponse.json({
       success: true,
       message: 'Verification code sent to your uOttawa inbox.',
+      challengeToken,
       simulated: result.simulated,
       simulatedCode: result.simulatedCode,
     });
+
+    const isSecure = req.url.startsWith('https://') || getEnv('NODE_ENV') === 'production';
 
     // 4. Attach 10-Minute Stateless Challenge Cookie
     response.cookies.set({
       name: OTP_CHALLENGE_COOKIE_NAME,
       value: challengeToken,
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isSecure,
       sameSite: 'lax',
       maxAge: 600, // 10 minutes
       path: '/',
@@ -70,6 +73,6 @@ export async function POST(req: NextRequest) {
     return response;
   } catch (err: any) {
     console.error('Send OTP API Error:', err);
-    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: err?.message || 'Internal Server Error' }, { status: 500 });
   }
 }
