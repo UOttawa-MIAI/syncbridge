@@ -1,3 +1,5 @@
+import { getEnv } from './auth';
+
 export interface SendOtpResult {
   success: boolean;
   simulated?: boolean;
@@ -11,8 +13,8 @@ export interface SendOtpResult {
  */
 export async function sendOtpEmail(email: string, otpCode: string): Promise<SendOtpResult> {
   const cleanEmail = email.trim().toLowerCase();
-  const apiKey = process.env.RESEND_API_KEY;
-  const fromEmail = process.env.EMAIL_FROM || 'uOttawa MIAI SyncBridge <auth@orbitalassets.net>';
+  const apiKey = getEnv('RESEND_API_KEY', '');
+  const fromEmail = getEnv('EMAIL_FROM', 'uOttawa MIAI SyncBridge <auth@orbitalassets.net>');
 
   // Simulation Mode (when no API key is provided)
   if (!apiKey || apiKey.trim() === '') {
@@ -27,7 +29,7 @@ export async function sendOtpEmail(email: string, otpCode: string): Promise<Send
     return {
       success: true,
       simulated: true,
-      simulatedCode: process.env.NODE_ENV !== 'production' ? otpCode : undefined,
+      simulatedCode: getEnv('NODE_ENV') !== 'production' ? otpCode : undefined,
     };
   }
 
@@ -119,10 +121,10 @@ export async function sendOtpEmail(email: string, otpCode: string): Promise<Send
       }),
     });
 
-    const data = await res.json();
+    const data: any = await res.json().catch(() => ({}));
     if (!res.ok) {
       console.error('Resend API Error:', data);
-      return { success: false, error: data?.message || 'Failed to dispatch email' };
+      return { success: false, error: data?.message || `Email service error (${res.status})` };
     }
 
     return { success: true };

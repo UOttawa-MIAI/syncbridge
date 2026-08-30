@@ -6,8 +6,19 @@ export const OTP_CHALLENGE_COOKIE_NAME = 'syncbridge_otp_challenge';
 
 const DEFAULT_SECRET = 'syncbridge_dev_jwt_secret_fallback_key_8f001a_32chars';
 
+export function getEnv(key: string, defaultValue: string = ''): string {
+  try {
+    if (typeof process !== 'undefined' && process?.env && process.env[key] !== undefined) {
+      return String(process.env[key]).trim();
+    }
+  } catch {
+    // ignore
+  }
+  return defaultValue;
+}
+
 function getJwtSecret(): Uint8Array {
-  const secret = process.env.AUTH_SECRET || DEFAULT_SECRET;
+  const secret = getEnv('AUTH_SECRET', DEFAULT_SECRET);
   return new TextEncoder().encode(secret.padEnd(32, '0'));
 }
 
@@ -22,7 +33,7 @@ export function isEmailWhitelisted(email: string): { whitelisted: boolean; isUOt
   const cleanEmail = email.trim().toLowerCase();
   const isUOttawa = cleanEmail.endsWith('@uottawa.ca') || cleanEmail.endsWith('@alumni.uottawa.ca');
 
-  const whitelistEnv = process.env.ADMIN_WHITELIST || '';
+  const whitelistEnv = getEnv('ADMIN_WHITELIST', '');
   const allowedList = whitelistEnv
     .split(',')
     .map((e) => e.trim().toLowerCase())
@@ -123,7 +134,7 @@ export async function verifySessionToken(token: string): Promise<{ email: string
       return { email: payload.email };
     }
     return null;
-  } catch (err) {
+  } catch {
     return null;
   }
 }

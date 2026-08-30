@@ -77,7 +77,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         body: JSON.stringify({ email: cleanEmail }),
       });
 
-      const data = await res.json();
+      let data: any = {};
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        data = await res.json().catch(() => ({}));
+      } else {
+        const text = await res.text().catch(() => '');
+        throw new Error(text || `Server error (${res.status})`);
+      }
+
       if (!res.ok) {
         throw new Error(data.error || 'Failed to send verification code.');
       }
@@ -112,7 +120,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         body: JSON.stringify({ email: email.trim().toLowerCase(), code: cleanCode }),
       });
 
-      const data = await res.json();
+      let data: any = {};
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        data = await res.json().catch(() => ({}));
+      } else {
+        const text = await res.text().catch(() => '');
+        throw new Error(text || `Server error (${res.status})`);
+      }
+
       if (!res.ok) {
         throw new Error(data.error || 'Invalid verification code.');
       }
