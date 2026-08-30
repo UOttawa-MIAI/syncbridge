@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { isEmailWhitelisted, generateOtpCode, createOtpChallengeToken, OTP_CHALLENGE_COOKIE_NAME } from '@/lib/auth';
 import { sendOtpEmail } from '@/lib/email';
 
+export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {

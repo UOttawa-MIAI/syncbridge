@@ -7,6 +7,7 @@ import {
   OTP_CHALLENGE_COOKIE_NAME,
 } from '@/lib/auth';
 
+export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {

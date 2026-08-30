@@ -1,5 +1,3 @@
-import { Resend } from 'resend';
-
 export interface SendOtpResult {
   success: boolean;
   simulated?: boolean;
@@ -9,7 +7,7 @@ export interface SendOtpResult {
 
 /**
  * Sends a 6-digit login OTP code to the recipient's uOttawa email address.
- * Uses Resend if RESEND_API_KEY is configured, or logs to terminal in Simulation Mode.
+ * Calls Resend REST API via Edge-native fetch() or logs to terminal in Simulation Mode.
  */
 export async function sendOtpEmail(email: string, otpCode: string): Promise<SendOtpResult> {
   const cleanEmail = email.trim().toLowerCase();
@@ -33,10 +31,8 @@ export async function sendOtpEmail(email: string, otpCode: string): Promise<Send
     };
   }
 
-  // Live Email Dispatch via Resend
+  // Live Email Dispatch via Resend REST API (Edge-native, zero node-only dependencies)
   try {
-    const resend = new Resend(apiKey);
-
     const htmlContent = `
 <!DOCTYPE html>
 <html>
@@ -109,16 +105,24 @@ export async function sendOtpEmail(email: string, otpCode: string): Promise<Send
 </html>
     `.trim();
 
-    const { data, error } = await resend.emails.send({
-      from: fromEmail,
-      to: cleanEmail,
-      subject: `uOttawa MIAI SyncBridge Code: ${otpCode}`,
-      html: htmlContent,
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: fromEmail,
+        to: cleanEmail,
+        subject: `uOttawa MIAI SyncBridge Code: ${otpCode}`,
+        html: htmlContent,
+      }),
     });
 
-    if (error) {
-      console.error('Resend API Error:', error);
-      return { success: false, error: error.message };
+    const data = await res.json();
+    if (!res.ok) {
+      console.error('Resend API Error:', data);
+      return { success: false, error: data?.message || 'Failed to dispatch email' };
     }
 
     return { success: true };
